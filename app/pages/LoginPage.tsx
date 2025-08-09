@@ -9,42 +9,38 @@ import { Plane } from 'lucide-react'
 import AdminDashboard from './AdminDashboard'
 import UserDashboard from './UserDashboard'
 import Footer from '../components/common/Footer'
+import { login as apiLogin, getMe } from '@/lib/api'
 
 export default function LoginPage() {
   const [credentials, setCredentials] = useState({ id: '', password: '' })
   const [userType, setUserType] = useState<'admin' | 'user' | null>(null)
   const [currentUser, setCurrentUser] = useState<any>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
-    
-    // Mock authentication
-    if (credentials.id === 'admin' && credentials.password === 'admin123') {
-      setUserType('admin')
+    setError(null)
+    setLoading(true)
+    try {
+      const token = await apiLogin(credentials.id, credentials.password)
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('dc_token', token)
+      }
+      const me = await getMe()
       setCurrentUser({
-        id: 'admin',
-        name: 'Admin User',
-        email: 'admin@droneclub.edu',
-        mobile: '+1-555-0100',
-        sisId: 'ADMIN001',
-        department: 'Administration',
-        class: 'Staff',
-        rollNumber: 'ADM001',
-        profileImage: '/placeholder.svg?height=100&width=100&text=AD'
+        id: me.id,
+        name: me.name || me.username,
+        email: me.email,
+        department: me.department,
+        class: me.class,
+        profileImage: '/placeholder.svg?height=100&width=100&text=U',
       })
-    } else if (credentials.id && credentials.password) {
-      setUserType('user')
-      setCurrentUser({
-        id: credentials.id,
-        name: 'John Doe',
-        email: 'john.doe@student.edu',
-        mobile: '+1-555-0123',
-        sisId: credentials.id,
-        department: 'Computer Science',
-        class: 'Senior',
-        rollNumber: 'CS2024001',
-        profileImage: '/placeholder.svg?height=100&width=100&text=JD'
-      })
+      setUserType(me.role === 'admin' ? 'admin' : 'user')
+    } catch (err) {
+      setError('Invalid credentials')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -52,6 +48,9 @@ export default function LoginPage() {
     setUserType(null)
     setCurrentUser(null)
     setCredentials({ id: '', password: '' })
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('dc_token')
+    }
   }
 
   if (userType === 'admin') {
@@ -99,14 +98,14 @@ export default function LoginPage() {
                   required
                 />
               </div>
-              <Button type="submit" className="w-full">
-                Sign In
+              {error && <p className="text-sm text-red-600">{error}</p>}
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? 'Signing In...' : 'Sign In'}
               </Button>
             </form>
             <div className="mt-4 text-center text-sm text-gray-600">
               <p>Demo credentials:</p>
               <p>Admin: admin / admin123</p>
-              <p>User: any ID / any password</p>
             </div>
           </CardContent>
         </Card>

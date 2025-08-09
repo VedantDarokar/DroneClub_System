@@ -1,23 +1,37 @@
 "use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { UserCheck, Clock } from 'lucide-react'
+import { getMyPresence, togglePresence } from '@/lib/api'
 
 export default function LabPresenceSection() {
   const [isPresent, setIsPresent] = useState(false)
   const [presenceTime, setPresenceTime] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  const handleTogglePresence = () => {
-    const newPresenceState = !isPresent
-    setIsPresent(newPresenceState)
-    
-    if (newPresenceState) {
-      setPresenceTime(new Date().toLocaleString())
-    } else {
-      setPresenceTime(null)
+  useEffect(() => {
+    let mounted = true
+    getMyPresence()
+      .then((p) => {
+        if (!mounted) return
+        setIsPresent(!!p.is_present)
+        setPresenceTime(p.since ? new Date(p.since).toLocaleString() : null)
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+    return () => {
+      mounted = false
     }
+  }, [])
+
+  const handleTogglePresence = async () => {
+    try {
+      const p = await togglePresence()
+      setIsPresent(!!p.is_present)
+      setPresenceTime(p.since ? new Date(p.since).toLocaleString() : null)
+    } catch {}
   }
 
   return (
@@ -45,6 +59,7 @@ export default function LabPresenceSection() {
                 type="checkbox"
                 checked={isPresent}
                 onChange={handleTogglePresence}
+                disabled={loading}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>

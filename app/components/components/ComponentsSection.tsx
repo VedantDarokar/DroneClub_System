@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Plus, Package, RotateCcw } from 'lucide-react'
 import ComponentForm from './ComponentForm'
 import UsageLog from './UsageLog'
 import EnhancedComponentCard from './EnhancedComponentCard'
+import { createComponent as apiCreateComponent, listComponents, useComponent as apiUseComponent, returnComponent as apiReturnComponent, listUsageLogs } from '@/lib/api'
 
 interface ComponentsSectionProps {
   isAdmin: boolean
@@ -15,145 +16,51 @@ interface ComponentsSectionProps {
 export default function ComponentsSection({ isAdmin }: ComponentsSectionProps) {
   const [showAddForm, setShowAddForm] = useState(false)
   const [userComponents, setUserComponents] = useState<{[key: number]: number}>({})
-  const [components, setComponents] = useState([
-    {
-      id: 1,
-      name: 'DJI Mini 3 Pro',
-      description: 'Compact drone with 4K camera and obstacle avoidance sensors',
-      quantity: 5,
-      inUse: 2,
-      image: '/placeholder.svg?height=200&width=200&text=Drone'
-    },
-    {
-      id: 2,
-      name: 'Propeller Set',
-      description: 'Replacement propellers for DJI Mini series drones',
-      quantity: 20,
-      inUse: 4,
-      image: '/placeholder.svg?height=200&width=200&text=Props'
-    },
-    {
-      id: 3,
-      name: 'LiPo Battery 3S',
-      description: '2300mAh LiPo battery for extended flight time',
-      quantity: 15,
-      inUse: 6,
-      image: '/placeholder.svg?height=200&width=200&text=Battery'
-    },
-    {
-      id: 4,
-      name: 'FPV Goggles',
-      description: 'First-person view goggles for immersive flying experience',
-      quantity: 8,
-      inUse: 3,
-      image: '/placeholder.svg?height=200&width=200&text=Goggles'
-    }
-  ])
+  const [components, setComponents] = useState<any[]>([])
+  const [usageLogs, setUsageLogs] = useState<any[]>([])
 
-  const [usageLogs, setUsageLogs] = useState([
-    {
-      id: 1,
-      user: 'John Doe',
-      component: 'DJI Mini 3 Pro',
-      quantity: 1,
-      timestamp: '2024-01-15 10:30 AM',
-      action: 'taken'
-    },
-    {
-      id: 2,
-      user: 'Jane Smith',
-      component: 'LiPo Battery 3S',
-      quantity: 2,
-      timestamp: '2024-01-15 09:45 AM',
-      action: 'taken'
-    },
-    {
-      id: 3,
-      user: 'Mike Johnson',
-      component: 'FPV Goggles',
-      quantity: 1,
-      timestamp: '2024-01-15 11:15 AM',
-      action: 'taken'
-    },
-    {
-      id: 4,
-      user: 'Sarah Wilson',
-      component: 'Propeller Set',
-      quantity: 4,
-      timestamp: '2024-01-14 03:20 PM',
-      action: 'returned'
+  useEffect(() => {
+    let mounted = true
+    listComponents().then((items) => {
+      if (!mounted) return
+      // map API fields to UI
+      setComponents(items.map((i: any) => ({
+        id: i.id,
+        name: i.name,
+        description: i.description,
+        quantity: i.quantity,
+        inUse: i.in_use,
+        image: i.image,
+      })))
+    }).catch(() => {})
+    if (isAdmin) {
+      listUsageLogs().then(setUsageLogs).catch(() => {})
     }
-  ])
+    return () => { mounted = false }
+  }, [isAdmin])
 
-  const handleAddComponent = (newComponent: any) => {
-    const component = {
-      ...newComponent,
-      id: components.length + 1,
-      inUse: 0
-    }
-    setComponents([...components, component])
+  const handleAddComponent = async (newComponent: any) => {
+    const created = await apiCreateComponent({
+      name: newComponent.name,
+      description: newComponent.description,
+      quantity: Number(newComponent.quantity),
+      image: newComponent.image,
+    })
+    setComponents(prev => [...prev, { id: created.id, name: created.name, description: created.description, quantity: created.quantity, inUse: created.in_use, image: created.image }])
     setShowAddForm(false)
   }
 
-  const handleUseComponent = (componentId: number, quantity: number) => {
-    // Update user's components
-    setUserComponents(prev => ({
-      ...prev,
-      [componentId]: (prev[componentId] || 0) + quantity
-    }))
-
-    // Update component's in-use count
-    setComponents(prev => prev.map(comp => 
-      comp.id === componentId 
-        ? { ...comp, inUse: comp.inUse + quantity }
-        : comp
-    ))
-
-    // Add to usage log
-    const component = components.find(c => c.id === componentId)
-    if (component) {
-      const newLog = {
-        id: usageLogs.length + 1,
-        user: 'Current User', // In real app, this would be the actual user name
-        component: component.name,
-        quantity: quantity,
-        timestamp: new Date().toLocaleString(),
-        action: 'taken' as const
-      }
-      setUsageLogs(prev => [newLog, ...prev])
-    }
+  const handleUseComponent = async (componentId: number, quantity: number) => {
+    await apiUseComponent(String(componentId), quantity)
+    setUserComponents(prev => ({ ...prev, [componentId]: (prev[componentId] || 0) + quantity }))
+    setComponents(prev => prev.map(comp => comp.id === componentId ? { ...comp, inUse: comp.inUse + quantity } : comp))
   }
 
-  const handleReturnComponent = (componentId: number) => {
+  const handleReturnComponent = async (componentId: number) => {
     const userQuantity = userComponents[componentId] || 0
-    
-    // Remove from user's components
-    setUserComponents(prev => {
-      const updated = { ...prev }
-      delete updated[componentId]
-      return updated
-    })
-    
-    // Update component's in-use count
-    setComponents(prev => prev.map(comp => 
-      comp.id === componentId 
-        ? { ...comp, inUse: Math.max(0, comp.inUse - userQuantity) }
-        : comp
-    ))
-
-    // Add to usage log
-    const component = components.find(c => c.id === componentId)
-    if (component) {
-      const newLog = {
-        id: usageLogs.length + 1,
-        user: 'Current User', // In real app, this would be the actual user name
-        component: component.name,
-        quantity: userQuantity,
-        timestamp: new Date().toLocaleString(),
-        action: 'returned' as const
-      }
-      setUsageLogs(prev => [newLog, ...prev])
-    }
+    await apiReturnComponent(String(componentId))
+    setUserComponents(prev => { const u = { ...prev }; delete u[componentId]; return u })
+    setComponents(prev => prev.map(comp => comp.id === componentId ? { ...comp, inUse: Math.max(0, comp.inUse - userQuantity) } : comp))
   }
 
   const myComponentsCount = Object.keys(userComponents).length
@@ -190,7 +97,6 @@ export default function ComponentsSection({ isAdmin }: ComponentsSectionProps) {
         </Card>
       )}
 
-      {/* My Components Section - Only for Users */}
       {!isAdmin && myComponentsCount > 0 && (
         <Card>
           <CardHeader>
@@ -235,7 +141,6 @@ export default function ComponentsSection({ isAdmin }: ComponentsSectionProps) {
         </Card>
       )}
 
-      {/* Available Components */}
       <Card>
         <CardHeader>
           <CardTitle>Available Components</CardTitle>
@@ -259,7 +164,7 @@ export default function ComponentsSection({ isAdmin }: ComponentsSectionProps) {
         </CardContent>
       </Card>
 
-      {isAdmin && (
+      {isAdmin && usageLogs.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Usage Logs</CardTitle>

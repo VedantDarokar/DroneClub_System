@@ -5,96 +5,50 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Key, Clock, AlertCircle } from 'lucide-react'
 import UserKeyCard from './UserKeyCard'
+import { getKeyState, toggleKey } from '@/lib/api'
 
 interface KeysSectionProps {
   isAdmin: boolean
   currentUser?: any
 }
 
-// Mock global key state - in a real app, this would be managed by a state management solution
-let globalKeyState = {
-  isInUse: false,
-  currentHolder: null as any,
-  takenAt: null as string | null
-}
-
 export default function KeysSection({ isAdmin, currentUser }: KeysSectionProps) {
-  const [keyState, setKeyState] = useState(globalKeyState)
+  const [keyState, setKeyState] = useState({ isInUse: false, currentHolder: null as any, takenAt: null as string | null })
   const [userHasKey, setUserHasKey] = useState(false)
 
-  const [users] = useState([
-    {
-      id: 'user001',
-      name: 'John Doe',
-      profileImage: '/placeholder.svg?height=80&width=80&text=JD',
-      mobile: '+1-555-0123',
-      email: 'john.doe@student.edu',
-      sisId: 'CS2024001',
-      department: 'Computer Science',
-      class: 'Senior',
-      rollNumber: 'CS001',
-      keyStatus: 'Returned',
-      keyTaken: '2024-01-15 09:30 AM',
-      keyReturned: '2024-01-15 02:45 PM'
-    },
-    {
-      id: 'user002',
-      name: 'Jane Smith',
-      profileImage: '/placeholder.svg?height=80&width=80&text=JS',
-      mobile: '+1-555-0124',
-      email: 'jane.smith@student.edu',
-      sisId: 'EE2024002',
-      department: 'Electrical Engineering',
-      class: 'Junior',
-      rollNumber: 'EE002',
-      keyStatus: 'Returned',
-      keyTaken: '2024-01-14 02:15 PM',
-      keyReturned: '2024-01-14 05:30 PM'
-    },
-    {
-      id: 'user003',
-      name: 'Mike Johnson',
-      profileImage: '/placeholder.svg?height=80&width=80&text=MJ',
-      mobile: '+1-555-0125',
-      email: 'mike.johnson@student.edu',
-      sisId: 'ME2024003',
-      department: 'Mechanical Engineering',
-      class: 'Sophomore',
-      rollNumber: 'ME003',
-      keyStatus: 'Returned',
-      keyTaken: '2024-01-15 11:45 AM',
-      keyReturned: '2024-01-15 04:20 PM'
+  useEffect(() => {
+    let mounted = true
+    getKeyState()
+      .then((s) => {
+        if (!mounted) return
+        setKeyState({
+          isInUse: s.is_in_use,
+          currentHolder: s.current_holder_name ? { id: s.current_holder_id, name: s.current_holder_name } : null,
+          takenAt: s.taken_at ? new Date(s.taken_at).toLocaleString() : null,
+        })
+      })
+      .catch(() => {})
+    return () => {
+      mounted = false
     }
-  ])
+  }, [])
 
   useEffect(() => {
-    // Check if current user has the key
     if (currentUser) {
       setUserHasKey(keyState.currentHolder?.id === currentUser.id)
     }
   }, [keyState, currentUser])
 
-  const handleToggleKey = () => {
+  const handleToggleKey = async () => {
     if (!currentUser) return
-
-    if (userHasKey) {
-      // User is returning the key
-      globalKeyState = {
-        isInUse: false,
-        currentHolder: null,
-        takenAt: null
-      }
-      setKeyState({ ...globalKeyState })
-    } else if (!keyState.isInUse) {
-      // User is taking the key (only if no one else has it)
-      const now = new Date().toLocaleString()
-      globalKeyState = {
-        isInUse: true,
-        currentHolder: currentUser,
-        takenAt: now
-      }
-      setKeyState({ ...globalKeyState })
-    }
+    try {
+      const s = await toggleKey()
+      setKeyState({
+        isInUse: s.is_in_use,
+        currentHolder: s.current_holder_name ? { id: s.current_holder_id, name: s.current_holder_name } : null,
+        takenAt: s.taken_at ? new Date(s.taken_at).toLocaleString() : null,
+      })
+    } catch {}
   }
 
   const canTakeKey = !keyState.isInUse || userHasKey
@@ -109,7 +63,6 @@ export default function KeysSection({ isAdmin, currentUser }: KeysSectionProps) 
         </p>
       </div>
 
-      {/* User Key Toggle Section - Only for Users */}
       {!isAdmin && currentUser && (
         <Card className="max-w-md">
           <CardHeader>
@@ -177,7 +130,6 @@ export default function KeysSection({ isAdmin, currentUser }: KeysSectionProps) 
         </Card>
       )}
 
-      {/* Current Key Holders */}
       <Card>
         <CardHeader>
           <CardTitle>Current Key Holders ({activeKeys.length})</CardTitle>
@@ -206,21 +158,12 @@ export default function KeysSection({ isAdmin, currentUser }: KeysSectionProps) 
                           Has Key
                         </Badge>
                       </div>
-                      
-                      <div className="space-y-1 text-xs text-gray-600">
-                        <div>
-                          <span className="font-medium">SIS ID:</span> {user.sisId}
+                      {keyState.takenAt && (
+                        <div className="flex items-center text-xs text-gray-500 mt-2 bg-white p-2 rounded">
+                          <Clock className="w-3 h-3 mr-1" />
+                          <span>Taken: {keyState.takenAt}</span>
                         </div>
-                        <div>
-                          <span className="font-medium">Department:</span> {user.department}
-                        </div>
-                        {keyState.takenAt && (
-                          <div className="flex items-center text-xs text-gray-500 mt-2 bg-white p-2 rounded">
-                            <Clock className="w-3 h-3 mr-1" />
-                            <span>Taken: {keyState.takenAt}</span>
-                          </div>
-                        )}
-                      </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -235,23 +178,6 @@ export default function KeysSection({ isAdmin, currentUser }: KeysSectionProps) 
           )}
         </CardContent>
       </Card>
-
-      {/* Key History - Admin Only */}
-      {isAdmin && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Key Usage History</CardTitle>
-            <CardDescription>Recent key usage history for all users</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {users.map((user) => (
-                <UserKeyCard key={`history-${user.id}`} user={user} isAdmin={isAdmin} showHistory />
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   )
 }
