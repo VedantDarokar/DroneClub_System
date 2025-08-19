@@ -1,13 +1,17 @@
 "use client"
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Plus, Package, RotateCcw } from 'lucide-react'
+import { Plus, Package, RotateCcw, Search } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
 import ComponentForm from './ComponentForm'
 import UsageLog from './UsageLog'
 import EnhancedComponentCard from './EnhancedComponentCard'
 import { createComponent as apiCreateComponent, listComponents, useComponent as apiUseComponent, returnComponent as apiReturnComponent, listUsageLogs } from '@/lib/api'
+import { toast } from '@/hooks/use-toast'
 
 interface ComponentsSectionProps {
   isAdmin: boolean
@@ -18,9 +22,14 @@ export default function ComponentsSection({ isAdmin }: ComponentsSectionProps) {
   const [userComponents, setUserComponents] = useState<{[key: number]: number}>({})
   const [components, setComponents] = useState<any[]>([])
   const [usageLogs, setUsageLogs] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [searchText, setSearchText] = useState("")
+  const [showAvailableOnly, setShowAvailableOnly] = useState(false)
+  const [showMineOnly, setShowMineOnly] = useState(false)
 
   useEffect(() => {
     let mounted = true
+    setLoading(true)
     listComponents().then((items) => {
       if (!mounted) return
       // map API fields to UI
@@ -32,7 +41,11 @@ export default function ComponentsSection({ isAdmin }: ComponentsSectionProps) {
         inUse: i.in_use,
         image: i.image,
       })))
-    }).catch(() => {})
+    }).catch(() => {
+      toast({ title: 'Failed to load components' })
+    }).finally(() => {
+      if (mounted) setLoading(false)
+    })
     if (isAdmin) {
       listUsageLogs().then(setUsageLogs).catch(() => {})
     }
@@ -40,30 +53,60 @@ export default function ComponentsSection({ isAdmin }: ComponentsSectionProps) {
   }, [isAdmin])
 
   const handleAddComponent = async (newComponent: any) => {
-    const created = await apiCreateComponent({
-      name: newComponent.name,
-      description: newComponent.description,
-      quantity: Number(newComponent.quantity),
-      image: newComponent.image,
-    })
-    setComponents(prev => [...prev, { id: created.id, name: created.name, description: created.description, quantity: created.quantity, inUse: created.in_use, image: created.image }])
-    setShowAddForm(false)
+    try {
+      const created = await apiCreateComponent({
+        name: newComponent.name,
+        description: newComponent.description,
+        quantity: Number(newComponent.quantity),
+        image: newComponent.image,
+      })
+      setComponents(prev => [...prev, { id: created.id, name: created.name, description: created.description, quantity: created.quantity, inUse: created.in_use, image: created.image }])
+      setShowAddForm(false)
+      toast({ title: 'Component added' })
+    } catch {
+      toast({ title: 'Failed to add component' })
+    }
   }
 
   const handleUseComponent = async (componentId: number, quantity: number) => {
-    await apiUseComponent(String(componentId), quantity)
-    setUserComponents(prev => ({ ...prev, [componentId]: (prev[componentId] || 0) + quantity }))
-    setComponents(prev => prev.map(comp => comp.id === componentId ? { ...comp, inUse: comp.inUse + quantity } : comp))
+    try {
+      await apiUseComponent(String(componentId), quantity)
+      setUserComponents(prev => ({ ...prev, [componentId]: (prev[componentId] || 0) + quantity }))
+      setComponents(prev => prev.map(comp => comp.id === componentId ? { ...comp, inUse: comp.inUse + quantity } : comp))
+      toast({ title: 'Marked as in use' })
+    } catch {
+      toast({ title: 'Failed to mark as in use' })
+    }
   }
 
   const handleReturnComponent = async (componentId: number) => {
-    const userQuantity = userComponents[componentId] || 0
-    await apiReturnComponent(String(componentId))
-    setUserComponents(prev => { const u = { ...prev }; delete u[componentId]; return u })
-    setComponents(prev => prev.map(comp => comp.id === componentId ? { ...comp, inUse: Math.max(0, comp.inUse - userQuantity) } : comp))
+    try {
+      const userQuantity = userComponents[componentId] || 0
+      await apiReturnComponent(String(componentId))
+      setUserComponents(prev => { const u: any = { ...prev }; delete u[componentId]; return u })
+      setComponents(prev => prev.map(comp => comp.id === componentId ? { ...comp, inUse: Math.max(0, comp.inUse - userQuantity) } : comp))
+      toast({ title: 'Returned component' })
+    } catch {
+      toast({ title: 'Failed to return component' })
+    }
   }
 
   const myComponentsCount = Object.keys(userComponents).length
+
+  const filteredComponents = useMemo(() => {
+    let list = [...components]
+    if (showMineOnly) {
+      list = list.filter(c => (userComponents as any)[c.id] > 0)
+    }
+    if (showAvailableOnly) {
+      list = list.filter(c => (c.quantity - c.inUse) > 0)
+    }
+    if (searchText.trim()) {
+      const q = searchText.toLowerCase()
+      list = list.filter(c => c.name.toLowerCase().includes(q) || (c.description || '').toLowerCase().includes(q))
+    }
+    return list.sort((a, b) => a.name.localeCompare(b.name))
+  }, [components, showMineOnly, showAvailableOnly, searchText, userComponents])
 
   return (
     <div className="space-y-6">
@@ -149,18 +192,53 @@ export default function ComponentsSection({ isAdmin }: ComponentsSectionProps) {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {components.map((component) => (
-              <EnhancedComponentCard 
-                key={component.id} 
-                component={component} 
-                isAdmin={isAdmin}
-                userQuantity={userComponents[component.id] || 0}
-                onUseComponent={handleUseComponent}
-                onReturnComponent={handleReturnComponent}
-              />
-            ))}
+          <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between mb-4">
+            <div className="flex items-center gap-2 max-w-sm w-full">
+              <Search className="h-4 w-4 text-gray-500" />
+              <Input placeholder="Search components..." value={searchText} onChange={(e) => setSearchText(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Switch id="available" checked={showAvailableOnly} onCheckedChange={setShowAvailableOnly} />
+                <label htmlFor="available" className="text-sm text-gray-600">Available only</label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch id="mine" checked={showMineOnly} onCheckedChange={setShowMineOnly} />
+                <label htmlFor="mine" className="text-sm text-gray-600">My components</label>
+              </div>
+            </div>
           </div>
+          <Separator className="mb-4" />
+
+          {loading && (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div className="h-72 rounded-lg bg-gray-100 animate-pulse" />
+              <div className="h-72 rounded-lg bg-gray-100 animate-pulse" />
+              <div className="h-72 rounded-lg bg-gray-100 animate-pulse" />
+            </div>
+          )}
+
+          {!loading && filteredComponents.length === 0 && (
+            <div className="text-center py-10 text-gray-500">
+              <Package className="h-10 w-10 mx-auto mb-2 text-gray-400" />
+              <p>No components found.</p>
+            </div>
+          )}
+
+          {!loading && filteredComponents.length > 0 && (
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              {filteredComponents.map((component) => (
+                <EnhancedComponentCard 
+                  key={component.id} 
+                  component={component} 
+                  isAdmin={isAdmin}
+                  userQuantity={userComponents[component.id] || 0}
+                  onUseComponent={handleUseComponent}
+                  onReturnComponent={handleReturnComponent}
+                />
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 

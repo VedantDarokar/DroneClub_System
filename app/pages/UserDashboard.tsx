@@ -8,6 +8,7 @@ import ProfilePage from '../components/profile/ProfilePage'
 import LabPresenceSection from '../components/presence/LabPresenceSection'
 import MembersSection from '../components/members/MembersSection'
 import Footer from '../components/common/Footer'
+import Schedular from '../components/Schedular/Schedular'
 
 interface UserDashboardProps {
   currentUser: any
@@ -21,8 +22,9 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
     { id: 'presence', label: 'Lab Presence' },
     { id: 'keys', label: 'Keys' },
     { id: 'members', label: 'Members Present' },
+    { id: 'scheduler', label: 'Schedule' },
     { id: 'components', label: 'Components' },
-    { id: 'profile', label: 'Profile' }
+    { id: 'profile', label: 'Profile' },
   ]
 
   const renderContent = () => {
@@ -33,6 +35,8 @@ export default function UserDashboard({ currentUser, onLogout }: UserDashboardPr
         return <KeysSection isAdmin={false} currentUser={currentUser} />
       case 'members':
         return <MembersSection />
+      case 'scheduler':
+        return <Schedular />
       case 'components':
         return <ComponentsSection isAdmin={false} />
       case 'profile':

@@ -1,69 +1,109 @@
-"use client"
+"use client";
 
-import { useState } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Plane } from 'lucide-react'
-import AdminDashboard from './AdminDashboard'
-import UserDashboard from './UserDashboard'
-import Footer from '../components/common/Footer'
-import { login as apiLogin, getMe } from '@/lib/api'
+import { useEffect, useState } from "react";
+import dynamic from "next/dynamic"; // ← for safe client-only imports
+
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Plane } from "lucide-react";
+import AdminDashboard from "./AdminDashboard";
+import UserDashboard from "./UserDashboard";
+import Footer from "../components/common/Footer";
+import { login as apiLogin, getMe } from "@/lib/api";
+
+// Load ThreeBackground only on client
+const ThreeBackground = dynamic(() => import("../components/ThreeBackground"), { ssr: false });
 
 export default function LoginPage() {
-  const [credentials, setCredentials] = useState({ id: '', password: '' })
-  const [userType, setUserType] = useState<'admin' | 'user' | null>(null)
-  const [currentUser, setCurrentUser] = useState<any>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [credentials, setCredentials] = useState({ id: "", password: "" });
+  const [userType, setUserType] = useState<"admin" | "user" | null>(null);
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("dc_token") : null;
+    if (token) {
+      setLoading(true);
+      getMe()
+        .then((me) => {
+          setCurrentUser({
+            id: me.id,
+            name: me.name || me.username,
+            email: me.email,
+            department: me.department,
+            class: me.class,
+            profileImage: "/placeholder.svg?height=100&width=100&text=U",
+          });
+          setUserType(me.role === "admin" ? "admin" : "user");
+        })
+        .catch(() => {
+          localStorage.removeItem("dc_token");
+        })
+        .finally(() => setLoading(false));
+    }
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setLoading(true)
+    e.preventDefault();
+    setError(null);
+    setLoading(true);
     try {
-      const token = await apiLogin(credentials.id, credentials.password)
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('dc_token', token)
+      const token = await apiLogin(credentials.id, credentials.password);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("dc_token", token);
       }
-      const me = await getMe()
+      const me = await getMe();
       setCurrentUser({
         id: me.id,
         name: me.name || me.username,
         email: me.email,
         department: me.department,
         class: me.class,
-        profileImage: '/placeholder.svg?height=100&width=100&text=U',
-      })
-      setUserType(me.role === 'admin' ? 'admin' : 'user')
+        profileImage: "/placeholder.svg?height=100&width=100&text=U",
+      });
+      setUserType(me.role === "admin" ? "admin" : "user");
     } catch (err) {
-      setError('Invalid credentials')
+      setError("Invalid credentials");
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleLogout = () => {
-    setUserType(null)
-    setCurrentUser(null)
-    setCredentials({ id: '', password: '' })
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('dc_token')
+    setUserType(null);
+    setCurrentUser(null);
+    setCredentials({ id: "", password: "" });
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("dc_token");
     }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-gray-600">
+        Loading...
+      </div>
+    );
   }
 
-  if (userType === 'admin') {
-    return <AdminDashboard currentUser={currentUser} onLogout={handleLogout} />
+  if (userType === "admin") {
+    return <AdminDashboard currentUser={currentUser} onLogout={handleLogout} />;
   }
 
-  if (userType === 'user') {
-    return <UserDashboard currentUser={currentUser} onLogout={handleLogout} />
+  if (userType === "user") {
+    return <UserDashboard currentUser={currentUser} onLogout={handleLogout} />;
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col">
-      <div className="flex-1 flex items-center justify-center p-4">
+    <div className="min-h-screen flex flex-col relative">
+      {/* Background */}
+      <ThreeBackground />
+
+      {/* Login Card */}
+      <div className="flex-1 flex items-center justify-center p-4 relative z-10">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <div className="flex justify-center mb-4">
@@ -100,17 +140,19 @@ export default function LoginPage() {
               </div>
               {error && <p className="text-sm text-red-600">{error}</p>}
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Signing In...' : 'Sign In'}
+                {loading ? "Signing In..." : "Sign In"}
               </Button>
             </form>
-            <div className="mt-4 text-center text-sm text-gray-600">
+            {/* <div className="mt-4 text-center text-sm text-gray-600">
               <p>Demo credentials:</p>
               <p>Admin: admin / admin123</p>
-            </div>
+            </div> */}
           </CardContent>
         </Card>
       </div>
+
+      {/* Footer */}
       <Footer />
     </div>
-  )
+  );
 }

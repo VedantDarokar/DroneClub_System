@@ -8,6 +8,7 @@ import ProfilePage from '../components/profile/ProfilePage'
 import MembersSection from '../components/members/MembersSection'
 import UserManagementSection from '../components/admin/UserManagementSection'
 import Footer from '../components/common/Footer'
+import Schedular from '../components/Schedular/Schedular'
 
 interface AdminDashboardProps {
   currentUser: any
@@ -20,9 +21,10 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
   const navItems = [
     { id: 'keys', label: 'Keys' },
     { id: 'members', label: 'Members' },
+    { id: 'scheduler', label: 'Scheduler' },
     { id: 'components', label: 'Components' },
     { id: 'users', label: 'Manage Users' },
-    { id: 'profile', label: 'Profile' }
+    { id: 'profile', label: 'Profile' },
   ]
 
   const renderContent = () => {
@@ -31,6 +33,8 @@ export default function AdminDashboard({ currentUser, onLogout }: AdminDashboard
         return <KeysSection isAdmin={true} currentUser={currentUser} />
       case 'members':
         return <MembersSection />
+      case 'scheduler':
+        return <Schedular />
       case 'components':
         return <ComponentsSection isAdmin={true} />
       case 'users':

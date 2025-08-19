@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Key, Clock, AlertCircle } from 'lucide-react'
 import UserKeyCard from './UserKeyCard'
-import { getKeyState, toggleKey } from '@/lib/api'
+import { getKeyState, toggleKey, listKeyHistory } from '@/lib/api'
 
 interface KeysSectionProps {
   isAdmin: boolean
@@ -15,6 +15,7 @@ interface KeysSectionProps {
 export default function KeysSection({ isAdmin, currentUser }: KeysSectionProps) {
   const [keyState, setKeyState] = useState({ isInUse: false, currentHolder: null as any, takenAt: null as string | null })
   const [userHasKey, setUserHasKey] = useState(false)
+  const [history, setHistory] = useState<any[]>([])
 
   useEffect(() => {
     let mounted = true
@@ -28,10 +29,13 @@ export default function KeysSection({ isAdmin, currentUser }: KeysSectionProps) 
         })
       })
       .catch(() => {})
+    if (isAdmin) {
+      listKeyHistory().then(setHistory).catch(() => setHistory([]))
+    }
     return () => {
       mounted = false
     }
-  }, [])
+  }, [isAdmin])
 
   useEffect(() => {
     if (currentUser) {
@@ -48,6 +52,10 @@ export default function KeysSection({ isAdmin, currentUser }: KeysSectionProps) 
         currentHolder: s.current_holder_name ? { id: s.current_holder_id, name: s.current_holder_name } : null,
         takenAt: s.taken_at ? new Date(s.taken_at).toLocaleString() : null,
       })
+      if (isAdmin) {
+        const h = await listKeyHistory()
+        setHistory(h)
+      }
     } catch {}
   }
 
@@ -178,6 +186,28 @@ export default function KeysSection({ isAdmin, currentUser }: KeysSectionProps) 
           )}
         </CardContent>
       </Card>
+
+      {isAdmin && history.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Key Usage History</CardTitle>
+            <CardDescription>Recent key usage for all users</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-sm text-gray-700">
+              {history.map((h) => (
+                <div key={h.id} className="flex items-center justify-between border rounded px-3 py-2">
+                  <div>
+                    <span className="font-medium">{h.user_name}</span>
+                    <span className="ml-2">{h.action === 'taken' ? 'took the key' : 'returned the key'}</span>
+                  </div>
+                  <div className="text-xs text-gray-500">{new Date(h.timestamp).toLocaleString()}</div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }
